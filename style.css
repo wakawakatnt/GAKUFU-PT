@@ -147,16 +147,6 @@ textarea {
     cursor: crosshair;
 }
 
-#debug-canvas {
-    max-width: 100%;
-    height: auto;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 6px;
-    margin-top: 10px;
-    display: none;
-}
-#debug-canvas.show { display: block; }
-
 .omr-controls {
     display: flex; gap: 12px; align-items: center;
     margin: 10px 0; flex-wrap: wrap;
@@ -262,9 +252,11 @@ input[type="range"]::-webkit-slider-thumb {
     width: 100%;
     background: rgba(0,0,0,0.4);
     color: #aed581;
-    details summary { user-select: none; }
-details summary:hover { color: #ffc107; }
+    font-size: 10px;
 }
+
+details summary { user-select: none; }
+details summary:hover { color: #ffc107; }
 
 #debug-canvas {
     margin-top: 8px;
@@ -280,7 +272,4 @@ details summary:hover { color: #ffc107; }
 .threshold-auto-label {
     color: #4caf50;
     font-weight: 600;
-}
-
-    font-size: 10px;
 }
