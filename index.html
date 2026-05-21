@@ -39,9 +39,9 @@
         <!-- 画像タブ -->
         <div class="tab-content" id="tab-image">
             <p class="hint">
-                <b>領域を指定して段ごとに認識</b>します。1段ずつ処理すると精度が大幅に上がります。<br>
-                ① 画像を読込 → ② 「段を自動検出」 or 矩形を手動でドラッグ → ③ 各段で音価・音部記号を指定して認識<br>
-                ⚠️ 認識結果は必ず確認・補正してください。
+                <b>高精度OMR</b>: 音符ヘッド分類（塗り/中空/全音符）、ステム検出、連桁認識、付点、臨時記号、休符、小節線を自動認識します。<br>
+                ① 画像を読込 → ② 「段を自動検出」or 矩形ドラッグ → ③ 各段の音部記号を確認（自動推定済み）→ ④ 「認識」<br>
+                ⚠️ 誤認識は <b>クリア</b> → 領域調整 → 再認識 で改善できます。
             </p>
             <div class="drop-zone" id="dz-image">
                 <span>📷 楽譜画像をドロップ or クリック (PNG/JPG)</span>
@@ -58,20 +58,36 @@
                     <button id="btn-auto-detect" class="btn primary">🔍 段を自動検出</button>
                     <button id="btn-clear-regions" class="btn">領域クリア</button>
                     <label>二値化:
-                        <input type="range" id="threshold" min="80" max="220" value="160">
-                        <span id="threshold-val">160</span>
+                        <input type="range" id="threshold" min="0" max="220" value="0">
+                        <span id="threshold-val">自動</span>
                     </label>
                     <label>モード:
                         <select id="omr-mode">
-                            <option value="region">領域選択（ドラッグ）</option>
-                            <option value="click">クリックで1音ずつ</option>
+                            <option value="region">領域編集</option>
+                            <option value="click">クリックで1音追加</option>
                         </select>
+                    </label>
+                    <label style="font-size:10px;">
+                        <input type="checkbox" id="show-debug" checked> デバッグ表示
                     </label>
                 </div>
 
                 <div id="systems-list"></div>
 
-                <canvas id="debug-canvas"></canvas>
+                <details style="margin-top:10px;">
+                    <summary style="cursor:pointer;font-size:11px;color:#aaa;">🔍 デバッグビュー（認識した要素の可視化）</summary>
+                    <div style="margin-top:8px;font-size:10px;color:#888;">
+                        <span style="color:#00e676;">●</span> 塗り潰しヘッド(4分以下)
+                        <span style="color:#00bcd4;">●</span> 中空ヘッド(2分)
+                        <span style="color:#ff80ab;">●</span> 全音符
+                        <span style="color:#2196f3;">│</span> ステム
+                        <span style="color:#ff9800;">▭</span> 連桁
+                        <span style="color:#9c27b0;">│</span> 小節線
+                        <span style="color:#ffeb3b;">▭</span> 休符
+                    </div>
+                    <canvas id="debug-canvas"></canvas>
+                </details>
+
                 <div id="omr-status">画像を読み込んでください</div>
             </div>
         </div>
