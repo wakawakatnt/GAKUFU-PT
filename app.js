@@ -8,9 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let imageState = {
         loaded: false,
         systems: [],
-        currentDrag: null,      // {mode: 'new'|'move'|'resize', ...}
+        currentDrag: null,
         sourceCanvas: null,
-        hoverHandle: null       // {sysIndex, handle}
+        hoverHandle: null
     };
 
     const HANDLE_SIZE = 10;
@@ -68,7 +68,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (thresholdEl) {
         thresholdEl.addEventListener('input', (e) => {
             const valEl = document.getElementById('threshold-val');
-            if (valEl) valEl.textContent = e.target.value;
+            const v = parseInt(e.target.value);
+            if (valEl) {
+                if (v === 0) {
+                    valEl.textContent = '自動';
+                    valEl.className = 'threshold-auto-label';
+                } else {
+                    valEl.textContent = v;
+                    valEl.className = '';
+                }
+            }
         });
     }
 
@@ -77,7 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!imageState.loaded) { setOmrStatus('先に画像を読み込んでください', 'warn'); return; }
         if (!OMR.isReady()) { setOmrStatus('OpenCV.js 読込中... 数秒待ってから再度押してください', 'warn'); return; }
         try {
-            const threshold = parseInt(document.getElementById('threshold').value);
+            const thresholdRaw = parseInt(document.getElementById('threshold').value);
+            const threshold = thresholdRaw > 0 ? thresholdRaw : 0;
             const systems = OMR.detectSystems(imageState.sourceCanvas, { threshold });
             if (systems.length === 0) {
                 setOmrStatus('段を検出できませんでした。閾値を調整するか手動で矩形を描いてください', 'warn');
@@ -88,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 y: s.y,
                 w: imageState.sourceCanvas.width,
                 h: s.height,
-                clef: i % 2 === 0 ? 'treble' : 'bass',
+                clef: 'auto',
                 duration: 1,
                 notes: null,
                 label: `段${i + 1}`
@@ -111,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setOmrStatus('領域をクリアしました', 'ok');
     });
 
-    // ========== オーバーレイ：矩形編集（追加・移動・リサイズ） ==========
+    // ========== オーバーレイ：矩形編集 ==========
     const overlay = document.getElementById('overlay-canvas');
 
     if (overlay) {
@@ -132,7 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function findHandleAt(x, y) {
-        // 四隅・四辺のハンドルを検出
         for (let i = imageState.systems.length - 1; i >= 0; i--) {
             const s = imageState.systems[i];
             const handles = getHandles(s);
@@ -147,7 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function findRegionAt(x, y) {
-        // 上から後ろから探す（重なってる場合は手前を優先）
         for (let i = imageState.systems.length - 1; i >= 0; i--) {
             const s = imageState.systems[i];
             if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
@@ -158,7 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getHandles(s) {
-        // 8個のハンドル位置（四隅+四辺中央）
         return [
             { type: 'nw', x: s.x, y: s.y },
             { type: 'n',  x: s.x + s.w / 2, y: s.y },
@@ -181,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 1. ハンドル上か？ → リサイズ
         const handle = findHandleAt(pos.x, pos.y);
         if (handle) {
             const s = imageState.systems[handle.sysIndex];
@@ -195,7 +201,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 2. 既存矩形の内側か？ → 移動
         const regionIdx = findRegionAt(pos.x, pos.y);
         if (regionIdx >= 0) {
             const s = imageState.systems[regionIdx];
@@ -208,7 +213,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 3. 空白 → 新規作成
         imageState.currentDrag = {
             mode: 'new',
             x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y
@@ -218,7 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function onOverlayMouseMove(e) {
         const pos = getMousePos(e);
 
-        // ドラッグ中
         if (imageState.currentDrag) {
             const d = imageState.currentDrag;
             if (d.mode === 'new') {
@@ -237,7 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // ホバー中のカーソル変更
         const handle = findHandleAt(pos.x, pos.y);
         if (handle) {
             overlay.style.cursor = getCursorForHandle(handle.handle);
@@ -254,10 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (handle.includes('e')) { nw = ow + dx; }
         if (handle.includes('n')) { ny = oy + dy; nh = oh - dy; }
         if (handle.includes('s')) { nh = oh + dy; }
-        // 最小サイズ
         if (nw < 30) { if (handle.includes('w')) nx = ox + ow - 30; nw = 30; }
         if (nh < 20) { if (handle.includes('n')) ny = oy + oh - 20; nh = 20; }
-        // 範囲チェック
         s.x = clamp(nx, 0, overlay.width - nw);
         s.y = clamp(ny, 0, overlay.height - nh);
         s.w = Math.min(nw, overlay.width - s.x);
@@ -281,15 +281,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (w > 30 && h > 20) {
                 imageState.systems.push({
                     x, y, w, h,
-                    clef: 'treble', duration: 1, notes: null,
+                    clef: 'auto', duration: 1, notes: null,
                     label: `段${imageState.systems.length + 1}`
                 });
                 renderSystemsList();
             }
-        }
-        // 移動・リサイズの場合は既存領域の認識結果はクリア（位置変わったから）
-        if (d.mode === 'move' || d.mode === 'resize') {
-            // 結果を保持したい場合もあるので、ここではクリアせず、ユーザーに再認識を促す
         }
         imageState.currentDrag = null;
         drawOverlay();
@@ -316,7 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineWidth = isActive ? 3 : 2;
             ctx.strokeRect(s.x, s.y, s.w, s.h);
 
-            // ラベル
             ctx.fillStyle = s.notes ? 'rgba(76,175,80,0.95)' : 'rgba(255,193,7,0.95)';
             const labelY = Math.max(0, s.y - 20);
             ctx.fillRect(s.x, labelY, 70, 18);
@@ -324,7 +319,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.font = 'bold 12px sans-serif';
             ctx.fillText(s.label, s.x + 5, labelY + 13);
 
-            // ハンドル描画
             const handles = getHandles(s);
             ctx.fillStyle = '#fff';
             ctx.strokeStyle = '#333';
@@ -335,7 +329,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // 新規ドラッグ中の点線矩形
         if (imageState.currentDrag && imageState.currentDrag.mode === 'new') {
             const d = imageState.currentDrag;
             ctx.strokeStyle = 'rgba(33,150,243,0.95)';
@@ -360,10 +353,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="system-item" data-index="${i}">
                 <span class="system-item-label">${s.label}</span>
                 <select class="sys-clef">
+                    <option value="auto" ${s.clef === 'auto' ? 'selected' : ''}>自動推定</option>
                     <option value="treble" ${s.clef === 'treble' ? 'selected' : ''}>ト音 𝄞</option>
                     <option value="bass" ${s.clef === 'bass' ? 'selected' : ''}>ヘ音 𝄢</option>
                 </select>
-                <label style="font-size:10px;color:#aaa;">音価:
+                <label style="font-size:10px;color:#aaa;" title="OMRが音価を判定できなかった場合に使う値">フォールバック音価:
                     <select class="sys-dur">
                         <option value="4" ${s.duration == 4 ? 'selected' : ''}>全</option>
                         <option value="2" ${s.duration == 2 ? 'selected' : ''}>2分</option>
@@ -386,12 +380,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             item.querySelector('.sys-dur').addEventListener('change', e => {
                 imageState.systems[i].duration = parseFloat(e.target.value);
-                if (imageState.systems[i].notes) {
-                    imageState.systems[i].notes.forEach(n => {
-                        if (n.note) n.duration = parseFloat(e.target.value);
-                    });
-                    renderSystemsList();
-                }
             });
             item.querySelector('.sys-recognize').addEventListener('click', () => recognizeSystem(i));
             item.querySelector('.sys-clear').addEventListener('click', () => {
@@ -427,12 +415,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!OMR.isReady()) { setOmrStatus('OpenCV.js 読込中...', 'warn'); return; }
         const sys = imageState.systems[i];
         try {
-            const threshold = parseInt(document.getElementById('threshold').value);
+            const thresholdRaw = parseInt(document.getElementById('threshold').value);
+            const threshold = thresholdRaw > 0 ? thresholdRaw : 0;
+            const showDebug = document.getElementById('show-debug').checked;
             const notes = OMR.recognize(imageState.sourceCanvas, sys, {
                 threshold,
                 defaultDuration: sys.duration,
                 clef: sys.clef,
-                debugCanvas: document.getElementById('debug-canvas'),
+                debugCanvas: showDebug ? document.getElementById('debug-canvas') : null,
                 onStatus: (m, l) => setOmrStatus(`[${sys.label}] ${m}`, l)
             });
             sys.notes = notes;
@@ -457,9 +447,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            const threshold = parseInt(document.getElementById('threshold').value);
+            const thresholdRaw = parseInt(document.getElementById('threshold').value);
+            const threshold = thresholdRaw > 0 ? thresholdRaw : 0;
+            const clefToUse = sys.clef === 'auto' ? 'treble' : sys.clef;
             const pitch = OMR.pitchAtPoint(imageState.sourceCanvas, sys, x, y, {
-                threshold, clef: sys.clef
+                threshold, clef: clefToUse
             });
             if (!pitch) {
                 setOmrStatus('ピッチ判定失敗（領域内の五線検出が不安定）', 'err');
@@ -489,8 +481,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatNotesShort(notes) {
         return notes.slice(0, 30).map(n => {
             if (n.rest) return `R/${n.rest}`;
-            if (n.notes) return `[${n.notes.join(',')}]`;
-            return n.note;
+            if (n.notes) return `[${n.notes.join(',')}]/${n.duration}`;
+            return `${n.note}/${n.duration}`;
         }).join(' ') + (notes.length > 30 ? ` +${notes.length - 30}` : '');
     }
 
