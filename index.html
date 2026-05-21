@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sheet → ePiano JSON Converter</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+    <h1>🎼 Sheet → ePiano JSON Converter</h1>
+    <p class="subtitle">楽譜から ePiano Player v5.0 用 JSON を生成</p>
+</header>
+
+<main>
+    <!-- 入力ソース選択 -->
+    <section class="card">
+        <h2>1. 入力ソースを選択</h2>
+        <div class="tabs">
+            <button class="tab active" data-tab="musicxml">📄 MusicXML (推奨)</button>
+            <button class="tab" data-tab="image">📷 画像から認識</button>
+            <button class="tab" data-tab="manual">✏️ 手動入力</button>
+        </div>
+
+        <!-- MusicXML タブ -->
+        <div class="tab-content active" id="tab-musicxml">
+            <p class="hint">
+                MuseScore / Finale / Sibelius などで <b>.musicxml</b> / <b>.xml</b> / <b>.mxl</b> を書き出してアップロード。
+                最も正確な変換ができます。
+            </p>
+            <div class="drop-zone" id="dz-musicxml">
+                <span>📂 MusicXMLファイルをドロップ or クリック</span>
+                <input type="file" id="file-musicxml" accept=".xml,.musicxml,.mxl" hidden>
+            </div>
+            <div id="musicxml-info"></div>
+        </div>
+
+        <!-- 画像タブ -->
+        <div class="tab-content" id="tab-image">
+            <p class="hint">
+                ⚠️ 画像認識は完璧ではありません。<b>必ず認識結果を確認・補正</b>してください。
+                印刷譜・はっきりした画像ほど精度が上がります。
+            </p>
+            <div class="drop-zone" id="dz-image">
+                <span>📷 楽譜画像をドロップ or クリック (PNG/JPG)</span>
+                <input type="file" id="file-image" accept="image/*" hidden>
+            </div>
+            <div id="image-preview-container" style="display:none;">
+                <canvas id="image-canvas"></canvas>
+                <div class="omr-controls">
+                    <button id="btn-run-omr" class="btn primary">🔍 認識実行</button>
+                    <label>
+                        二値化閾値:
+                        <input type="range" id="threshold" min="80" max="220" value="160">
+                        <span id="threshold-val">160</span>
+                    </label>
+                </div>
+                <canvas id="debug-canvas"></canvas>
+                <div id="omr-status"></div>
+            </div>
+        </div>
+
+        <!-- 手動タブ -->
+        <div class="tab-content" id="tab-manual">
+            <p class="hint">
+                ABC記法風の簡易入力。例: <code>C4/4 D4/4 E4/2</code> （音名+オクターブ/音価）
+                改行で別トラック。
+            </p>
+            <textarea id="manual-input" rows="8" placeholder="C4/4 D4/4 E4/4 F4/4 | G4/2 G4/2&#10;C3/1 G3/1"></textarea>
+            <button id="btn-parse-manual" class="btn primary">解析</button>
+        </div>
+    </section>
+
+    <!-- 楽譜編集エリア -->
+    <section class="card" id="editor-section" style="display:none;">
+        <h2>2. 楽譜を確認・編集</h2>
+        <div class="meta-row">
+            <label>曲名: <input type="text" id="meta-title" value="Untitled"></label>
+            <label>BPM: <input type="number" id="meta-bpm" value="120" min="30" max="300"></label>
+            <label>楽器:
+                <select id="meta-instrument">
+                    <option value="piano1">ピアノ1</option>
+                    <option value="piano2">ピアノ2</option>
+                    <option value="piano3">ピアノ3</option>
+                    <option value="ep1">エレピ1</option>
+                    <option value="org1">オルガン1</option>
+                    <option value="bell1">ベル1</option>
+                    <option value="gtr1">ギター1</option>
+                    <option value="bass1">ベース1</option>
+                    <option value="str1">ストリングス</option>
+                </select>
+            </label>
+        </div>
+
+        <!-- 楽譜表示 (OSMD) -->
+        <div id="osmd-container"></div>
+
+        <!-- トラック編集 -->
+        <div id="tracks-editor"></div>
+
+        <div class="action-row">
+            <button id="btn-add-track" class="btn">+ トラック追加</button>
+            <button id="btn-transpose-up" class="btn">▲ オクターブ↑</button>
+            <button id="btn-transpose-down" class="btn">▼ オクターブ↓</button>
+        </div>
+    </section>
+
+    <!-- 出力 -->
+    <section class="card" id="output-section" style="display:none;">
+        <h2>3. ePiano JSON を出力</h2>
+        <div class="action-row">
+            <button id="btn-preview" class="btn">▶ プレビュー再生</button>
+            <button id="btn-stop-preview" class="btn">⏹ 停止</button>
+            <button id="btn-download" class="btn primary">💾 JSONダウンロード</button>
+            <button id="btn-copy" class="btn">📋 クリップボードにコピー</button>
+        </div>
+        <textarea id="json-output" rows="14" readonly></textarea>
+        <p class="hint">
+            このJSONを Tampermonkey の Piano Player v5 でドロップしてください。<br>
+            <code>version: "5.0"</code> が付与されているので「新バージョン」として認識されます。
+        </p>
+    </section>
+</main>
+
+<footer>
+    <p>
+        Powered by <a href="https://opensheetmusicdisplay.org/" target="_blank">OpenSheetMusicDisplay</a> ·
+        <a href="https://opencv.org/" target="_blank">OpenCV.js</a>
+    </p>
+</footer>
+
+<!-- 外部ライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.7/build/opensheetmusicdisplay.min.js"></script>
+<script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
+
+<!-- 自前スクリプト -->
+<script src="musicxml.js"></script>
+<script src="omr.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
