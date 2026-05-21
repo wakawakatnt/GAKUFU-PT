@@ -17,7 +17,7 @@
     <section class="card">
         <h2>1. 入力ソースを選択</h2>
         <div class="tabs">
-            <button class="tab active" data-tab="musicxml">📄 MusicXML (推奨)</button>
+            <button class="tab active" data-tab="musicxml">📄 MusicXML (推奨・高精度)</button>
             <button class="tab" data-tab="image">📷 画像から認識</button>
             <button class="tab" data-tab="manual">✏️ 手動入力</button>
         </div>
@@ -25,12 +25,13 @@
         <!-- MusicXML タブ -->
         <div class="tab-content active" id="tab-musicxml">
             <p class="hint">
-                MuseScore / Finale / Sibelius などで <b>.musicxml</b> / <b>.xml</b> / <b>.mxl</b> を書き出してアップロード。
-                最も正確な変換ができます。
+                MuseScore / Finale / Sibelius などで <b>.musicxml</b> / <b>.xml</b> を書き出してアップロード。
+                最も正確な変換ができます。<br>
+                MuseScore は無料でDLでき、PDFの楽譜もインポートできます。
             </p>
             <div class="drop-zone" id="dz-musicxml">
                 <span>📂 MusicXMLファイルをドロップ or クリック</span>
-                <input type="file" id="file-musicxml" accept=".xml,.musicxml,.mxl" hidden>
+                <input type="file" id="file-musicxml" accept=".xml,.musicxml" hidden>
             </div>
             <div id="musicxml-info"></div>
         </div>
@@ -38,33 +39,49 @@
         <!-- 画像タブ -->
         <div class="tab-content" id="tab-image">
             <p class="hint">
-                ⚠️ 画像認識は完璧ではありません。<b>必ず認識結果を確認・補正</b>してください。
-                印刷譜・はっきりした画像ほど精度が上がります。
+                <b>領域を指定して段ごとに認識</b>します。1段ずつ処理すると精度が大幅に上がります。<br>
+                ① 画像を読込 → ② 「段を自動検出」 or 矩形を手動でドラッグ → ③ 各段で音価・音部記号を指定して認識<br>
+                ⚠️ 認識結果は必ず確認・補正してください。
             </p>
             <div class="drop-zone" id="dz-image">
                 <span>📷 楽譜画像をドロップ or クリック (PNG/JPG)</span>
                 <input type="file" id="file-image" accept="image/*" hidden>
             </div>
+
             <div id="image-preview-container" style="display:none;">
-                <canvas id="image-canvas"></canvas>
+                <div class="canvas-wrap">
+                    <canvas id="image-canvas"></canvas>
+                    <canvas id="overlay-canvas" class="overlay"></canvas>
+                </div>
+
                 <div class="omr-controls">
-                    <button id="btn-run-omr" class="btn primary">🔍 認識実行</button>
-                    <label>
-                        二値化閾値:
+                    <button id="btn-auto-detect" class="btn primary">🔍 段を自動検出</button>
+                    <button id="btn-clear-regions" class="btn">領域クリア</button>
+                    <label>二値化:
                         <input type="range" id="threshold" min="80" max="220" value="160">
                         <span id="threshold-val">160</span>
                     </label>
+                    <label>モード:
+                        <select id="omr-mode">
+                            <option value="region">領域選択（ドラッグ）</option>
+                            <option value="click">クリックで1音ずつ</option>
+                        </select>
+                    </label>
                 </div>
+
+                <div id="systems-list"></div>
+
                 <canvas id="debug-canvas"></canvas>
-                <div id="omr-status"></div>
+                <div id="omr-status">画像を読み込んでください</div>
             </div>
         </div>
 
         <!-- 手動タブ -->
         <div class="tab-content" id="tab-manual">
             <p class="hint">
-                ABC記法風の簡易入力。例: <code>C4/4 D4/4 E4/2</code> （音名+オクターブ/音価）
-                改行で別トラック。
+                簡易記法：<code>音名+オクターブ/音価分母</code>。例:<br>
+                <code>C4/4 D4/4 E4/4 F4/4 | G4/2 G4/2</code> （4分音符4つ＋2分音符2つ）<br>
+                和音は <code>[C4,E4,G4]/4</code>、休符は <code>R/4</code>。改行で別トラック。
             </p>
             <textarea id="manual-input" rows="8" placeholder="C4/4 D4/4 E4/4 F4/4 | G4/2 G4/2&#10;C3/1 G3/1"></textarea>
             <button id="btn-parse-manual" class="btn primary">解析</button>
@@ -77,31 +94,44 @@
         <div class="meta-row">
             <label>曲名: <input type="text" id="meta-title" value="Untitled"></label>
             <label>BPM: <input type="number" id="meta-bpm" value="120" min="30" max="300"></label>
-            <label>楽器:
+            <label>デフォルト楽器:
                 <select id="meta-instrument">
                     <option value="piano1">ピアノ1</option>
                     <option value="piano2">ピアノ2</option>
                     <option value="piano3">ピアノ3</option>
+                    <option value="piano4">ピアノ4</option>
                     <option value="ep1">エレピ1</option>
+                    <option value="ep2">エレピ2</option>
                     <option value="org1">オルガン1</option>
+                    <option value="org2">オルガン2</option>
                     <option value="bell1">ベル1</option>
+                    <option value="chime">チャイム</option>
+                    <option value="music">オルゴール</option>
                     <option value="gtr1">ギター1</option>
                     <option value="bass1">ベース1</option>
+                    <option value="lead1">リード1</option>
+                    <option value="pad1">パッド1</option>
                     <option value="str1">ストリングス</option>
+                    <option value="flute">フルート</option>
+                    <option value="sax">サックス</option>
+                    <option value="brass">ブラス</option>
+                    <option value="choir">コーラス</option>
+                    <option value="harp">ハープ</option>
+                    <option value="marim">マリンバ</option>
+                    <option value="vibra">ビブラフォン</option>
                 </select>
             </label>
         </div>
 
-        <!-- 楽譜表示 (OSMD) -->
         <div id="osmd-container"></div>
 
-        <!-- トラック編集 -->
         <div id="tracks-editor"></div>
 
         <div class="action-row">
             <button id="btn-add-track" class="btn">+ トラック追加</button>
             <button id="btn-transpose-up" class="btn">▲ オクターブ↑</button>
             <button id="btn-transpose-down" class="btn">▼ オクターブ↓</button>
+            <button id="btn-refresh-display" class="btn">🔄 楽譜表示更新</button>
         </div>
     </section>
 
@@ -116,7 +146,7 @@
         </div>
         <textarea id="json-output" rows="14" readonly></textarea>
         <p class="hint">
-            このJSONを Tampermonkey の Piano Player v5 でドロップしてください。<br>
+            このJSONを Tampermonkey の <b>Piano Player v5</b> にドロップしてください。<br>
             <code>version: "5.0"</code> が付与されているので「新バージョン」として認識されます。
         </p>
     </section>
@@ -125,13 +155,14 @@
 <footer>
     <p>
         Powered by <a href="https://opensheetmusicdisplay.org/" target="_blank">OpenSheetMusicDisplay</a> ·
-        <a href="https://opencv.org/" target="_blank">OpenCV.js</a>
+        <a href="https://opencv.org/" target="_blank">OpenCV.js</a> ·
+        Made for ePiano Player v5
     </p>
 </footer>
 
 <!-- 外部ライブラリ -->
 <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.7/build/opensheetmusicdisplay.min.js"></script>
-<script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
+<script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
 
 <!-- 自前スクリプト -->
 <script src="musicxml.js"></script>
